@@ -24,4 +24,5 @@ done
 gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/perception/localization/localization_node;exec bash"' \
 gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/planning/global_planner/global_planner_node;exec bash"' \
 gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/planning/local_planner/local_planner_node;exec bash"' \
-gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/decision/decision_node;exec bash"'
+gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/decision/decision_node;exec bash"' \
+gnome-terminal --window -e 'bash -c "cd ${ROBORTS_PATH};./build/modules/driver/serial/serial_com_node;exec bash"'

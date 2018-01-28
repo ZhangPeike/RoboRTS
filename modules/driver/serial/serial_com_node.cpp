@@ -1,5 +1,6 @@
 #include <messages/EnemyPos.h>
 #include "modules/driver/serial/serial_com_node.h"
+#include "infantry_info.h"
 
 namespace rrts {
 namespace driver {
@@ -17,7 +18,8 @@ SerialComNode::SerialComNode(std::string module_name)
   CHECK(Initialization()) << "Initialization error.";
   is_open_ = true;
   stop_receive_ = false;
-  printf("Seral node is here!");
+  is_sim_ = serial_port_config.is_simulator();
+  printf("Serial node is here!");
 }
 
 bool SerialComNode::Initialization() {
@@ -196,8 +198,7 @@ void SerialComNode::ReceiveLoop() {
             break;
         }
       }
-    }
-    else {
+    } else {
       continue;
     }
   }
@@ -233,8 +234,13 @@ void SerialComNode::DataHandle() {
   switch (cmd_id) {
     case GAME_INFO_ID: memcpy(&game_information_, data_addr, data_length);
       //use it to control pipeline.
+      std::cout << "Game info>>>" << std::endl;
+      std::cout << "remain hp: " << game_information_.remain_hp << std::endl;
       break;
     case REAL_BLOOD_DATA_ID: memcpy(&robot_hurt_data_, data_addr, data_length);
+      std::cout << "Blood change>>>" << std::endl;
+      std::cout << "Which armor is hurt: " << robot_hurt_data_.armor_type << std::endl;
+      std::cout << "and the hurt type: " << robot_hurt_data_.hurt_type << std::endl;
       break;
     case REAL_SHOOT_DATA_ID: memcpy(&real_shoot_data_, data_addr, data_length);
       break;
@@ -247,6 +253,7 @@ void SerialComNode::DataHandle() {
     case SERVER_TO_USER_ID: memcpy(&student_download_data_, data_addr, data_length);
       break;
     case CHASSIS_DATA_ID: {
+      std::cout << "Chassis bottom data is received..." << std::endl;
       ros::Time current_time = ros::Time::now();
       memcpy(&chassis_information_, data_addr, data_length);
       nav_msgs::Odometry odom;
@@ -264,7 +271,9 @@ void SerialComNode::DataHandle() {
       odom.twist.twist.linear.y = (double) chassis_information_.y_speed / 1000;
       odom.twist.twist.angular.z =
           (double) (chassis_information_.gyro_palstance + chassis_information_.ecd_palstance) / 2;
-      odom_pub_.publish(odom);
+      if (!is_sim_) {
+        odom_pub_.publish(odom);
+      }
       geometry_msgs::TransformStamped odom_tf;
       odom_tf.header.frame_id = "odom";
       odom_tf.header.stamp = current_time;
@@ -273,36 +282,38 @@ void SerialComNode::DataHandle() {
       odom_tf.transform.translation.y = y;
       odom_tf.transform.translation.z = 0.0;
       odom_tf.transform.rotation = q;
-      tf_broadcaster_.sendTransform(odom_tf);
+      if (!is_sim_) {
+        tf_broadcaster_.sendTransform(odom_tf);
+      }
     }
       break;
 
     case GIMBAL_DATA_ID: memcpy(&gimbal_information_, data_addr, data_length);
-      printf("-->%d\n", gimbal_information_.ctrl_mode);
+      printf("Gimbal info-->%d\n", gimbal_information_.ctrl_mode);
       break;
 
     case SHOOT_TASK_DATA_ID: memcpy(&shoot_task_data_, data_addr, data_length);
-      printf("-->%d\n", shoot_task_data_.fric_wheel_run);
+      printf("Shoot task-->%d\n", shoot_task_data_.fric_wheel_run);
       break;
 
     case INFANTRY_ERR_ID: memcpy(&global_error_data_, data_addr, data_length);
-      printf("-->%d\n", global_error_data_.err_sta);
+      printf("Infantry err-->%d\n", global_error_data_.err_sta);
       break;
 
     case CONFIG_RESPONSE_ID: memcpy(&config_response_data_, data_addr, data_length);
-      printf("-->%d\n", config_response_data_.chassis_config);
+      printf("Config response-->%d\n", config_response_data_.chassis_config);
       break;
 
     case CALI_RESPONSE_ID: memcpy(&cali_response_data_, data_addr, data_length);
-      printf("-->%d\n", cali_response_data_.type);
+      printf("Cali response-->%d\n", cali_response_data_.type);
       break;
 
     case REMOTE_CTRL_INFO_ID: memcpy(&rc_info_data_, data_addr, data_length);
-      printf("-->%d\n", rc_info_data_.ch1);
+      printf("RC Info-->%d\n", rc_info_data_.ch1);
       break;
 
     case BOTTOM_VERSION_ID: memcpy(&version_info_data_, data_addr, data_length);
-      printf("-->%d\n", version_info_data_.num[0]);
+      printf("Bottom Version-->%d\n", version_info_data_.num[0]);
       break;
 
     default:LOG_WARNING << "Cannot Get Command ID";
