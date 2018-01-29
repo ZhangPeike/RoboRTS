@@ -1,6 +1,7 @@
+#include <time.h>
+#include <sys/time.h>
 #include <messages/EnemyPos.h>
 #include "modules/driver/serial/serial_com_node.h"
-#include "infantry_info.h"
 
 namespace rrts {
 namespace driver {
@@ -18,8 +19,12 @@ SerialComNode::SerialComNode(std::string module_name)
   CHECK(Initialization()) << "Initialization error.";
   is_open_ = true;
   stop_receive_ = false;
+  stop_send_ = false;
   is_sim_ = serial_port_config.is_simulator();
-  printf("Serial node is here!");
+  is_debug_ = serial_port_config.is_debug();
+  pack_length_ = 0;
+  total_length_ = 0;
+  free_length_ = UART_BUFF_SIZE;
 }
 
 bool SerialComNode::Initialization() {
@@ -121,12 +126,14 @@ void SerialComNode::Run() {
   receive_loop_thread_ = new std::thread(boost::bind(&SerialComNode::ReceiveLoop, this));
   sub_cmd_gim_ = nh_.subscribe("enemy_pos", 1, &SerialComNode::GimbalControlCallback, this);
   sub_cmd_vel_ = nh_.subscribe("cmd_vel", 1, &SerialComNode::ChassisControlCallback, this);
+  send_loop_thread_ = new std::thread(boost::bind(&SerialComNode::SendPack, this));
   ros::spin();
 }
 
 void SerialComNode::ReceiveLoop() {
   while (is_open_) {
     if (!stop_receive_) {
+      mutex_receive_.lock();
       read_buff_index_ = 0;
       read_len_ = ReceiveData(fd_, UART_BUFF_SIZE);
       while (read_len_--) {
@@ -198,6 +205,7 @@ void SerialComNode::ReceiveLoop() {
             break;
         }
       }
+      mutex_receive_.unlock();
     } else {
       continue;
     }
@@ -214,7 +222,9 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
   time.tv_usec = 0;
   selected = select(fd + 1, &fs_read, NULL, NULL, &time);
   if (selected > 0) {
+    mutex_receive_.lock();
     received_length = read(fd, rx_buf_, data_length);
+    mutex_receive_.unlock();
   } else if (selected == 0) {
     received_length = 0;
     LOG_WARNING_EVERY(10000) << "Uart Timeout";
@@ -322,43 +332,102 @@ void SerialComNode::DataHandle() {
 }
 
 void SerialComNode::GimbalControlCallback(const messages::EnemyPosConstPtr &msg) {
-  std::unique_lock<std::mutex> lock(mutex_send_);
-  gimbal_control_data_.ctrl_mode = GIMBAL_POSITION_MODE;
-  gimbal_control_data_.pit_ref = msg->enemy_pitch;
-  gimbal_control_data_.yaw_ref = msg->enemy_yaw;
-  gimbal_control_data_.visual_valid = 1;
+  uint8_t pack[PACK_MAX_SIZE];
+  GimbalControl gimbal_control_data;
+  if (is_debug_) {
+    gimbal_control_data.ctrl_mode = GIMBAL_RELAX;
+  } else {
+    gimbal_control_data.ctrl_mode = GIMBAL_POSITION_MODE;
+  }
+  gimbal_control_data.pit_ref = msg->enemy_pitch;
+  gimbal_control_data.yaw_ref = msg->enemy_yaw;
+  gimbal_control_data.visual_valid = 1;
   if (gimbal_control_data_.visual_valid && !stop_send_ && is_open_) {
-    int length = sizeof(GimbalControl);
-    SendDataHandle(GIMBAL_CTRL_ID, (uint8_t *) &gimbal_control_data_, length);
-    if (SendData(length) != length) {
-      LOG_WARNING << "Gimbal control data sent error";
+    int length = sizeof(GimbalControl), total_length = length + HEADER_LEN + CMD_LEN + CRC_LEN;
+    SendDataHandle(GIMBAL_CTRL_ID, (uint8_t *) &gimbal_control_data, pack, length);
+    if (total_length <= free_length_) {
+      memcpy(tx_buf_ + total_length_, pack, total_length);
+      free_length_ -= total_length;
+      total_length_ += total_length;
+    } else {
+      LOG_WARNING << "Overflow in Gimbal CB";
+      std::cout << "Gimbal call back data overflows the buffer" << std::endl;
     }
   }
 }
 
 void SerialComNode::ChassisControlCallback(const geometry_msgs::Twist::ConstPtr &vel) {
-  std::unique_lock<std::mutex> lock(mutex_send_);
-  chassis_control_data_.ctrl_mode = AUTO_FOLLOW_GIMBAL;
-  chassis_control_data_.x_speed = vel->linear.x * 1000.0;
-  chassis_control_data_.y_speed = vel->linear.y * 1000.0;
-  chassis_control_data_.w_info.x_offset = 0;
-  chassis_control_data_.w_info.y_offset = 0;
-  chassis_control_data_.w_info.w_speed = vel->angular.z;
-  int length = sizeof(ChassisControl);
-  SendDataHandle(CHASSIS_CTRL_ID, (uint8_t *) &chassis_control_data_, length);
-  if (SendData(length) != length) {
-    LOG_WARNING << "Chassis control data sent error";
+  static int count = 0, time_ms = 0, compress = 0;
+  static double frequency = 0;
+  static struct timeval time_last, time_current;
+  gettimeofday(&time_current, nullptr);
+  if (count == 0) {
+    count++;
+  } else {
+    time_ms = (time_current.tv_sec - time_last.tv_sec) * 1000 + (time_current.tv_usec - time_last.tv_usec) / 1000;
+    frequency = 1000.0 / time_ms;
+//    printf("Chassis callback is recycling %dms and %.1fHz\n", time_ms, frequency);
+  }
+  time_last = time_current;
+  compress++;
+  if (compress == COMPRESS_TIME) {
+    mutex_pack_.lock();
+    printf("Chassis callback is recycling %dms and %.1fHz\n", time_ms, frequency);
+    compress = 0;
+    uint8_t pack[PACK_MAX_SIZE];
+    ChassisControl chassis_control_data;
+    chassis_control_data.ctrl_mode = AUTO_FOLLOW_GIMBAL;
+    chassis_control_data.x_speed = vel->linear.x * 1000.0;
+    chassis_control_data.y_speed = vel->linear.y * 1000.0;
+    chassis_control_data.w_info.x_offset = 0;
+    chassis_control_data.w_info.y_offset = 0;
+    chassis_control_data.w_info.w_speed = vel->angular.z;
+    int length = sizeof(ChassisControl), pack_length = length + HEADER_LEN + CMD_LEN + CRC_LEN;
+    SendDataHandle(CHASSIS_CTRL_ID, (uint8_t *) &chassis_control_data, pack, pack_length);
+    if (pack_length_ <= free_length_) {
+      memcpy(tx_buf_ + total_length_, pack, pack_length);
+      free_length_ -= pack_length;
+      total_length_ += pack_length;
+    } else {
+      LOG_WARNING << "Overflow in Chassis CB";
+      std::cout << "Callback overflows the buffer" << std::endl;
+    }
+    mutex_pack_.unlock();
   }
 }
 
-void SerialComNode::SendDataHandle(uint16_t cmd_id, uint8_t *p_data, uint16_t len) {
-  FrameHeader *p_header = (FrameHeader *) tx_buf_;
+void SerialComNode::SendDataHandle(uint16_t cmd_id,
+                                   uint8_t *topack_data,
+                                   uint8_t *packed_data,
+                                   uint16_t len
+) {
+  FrameHeader *p_header = (FrameHeader *) packed_data;
   p_header->sof = UP_REG_ID;
   p_header->data_length = len;
-  memcpy(&tx_buf_[HEADER_LEN], (uint8_t *) &cmd_id, CMD_LEN);
-  AppendCrcOctCheckSum(tx_buf_, HEADER_LEN);
-  memcpy(&tx_buf_[HEADER_LEN + CMD_LEN], p_data, len);
-  AppendCrcHexCheckSum(tx_buf_, HEADER_LEN + CMD_LEN + len + CRC_LEN);
+  memcpy(packed_data + 4, (uint8_t *) &cmd_id, CMD_LEN);
+  AppendCrcOctCheckSum(packed_data, HEADER_LEN);
+  memcpy(packed_data + HEADER_LEN + CMD_LEN, topack_data, len);
+  AppendCrcHexCheckSum(packed_data, HEADER_LEN + CMD_LEN + CRC_LEN + len);
+}
+
+void SerialComNode::SendPack() {
+//  while (is_open_ && !stop_send_) {
+  while (1) {
+//    std::cout << "++++++++Send Loop++++++++" << std::endl;
+    if (total_length_ > 0) {
+      mutex_send_.lock();
+      std::cout << "Sending data>>>>>>" << std::endl;
+//      stop_receive_ = true;
+      int result = SendData(total_length_);
+      printf("Com send OK and length: %d\n", result);
+      total_length_ = 0;
+      free_length_ = UART_BUFF_SIZE;
+      mutex_send_.unlock();
+    } else {
+//      stop_receive_ = false;
+//      std::cout << "Send empty######" << std::endl;
+    }
+  }
 }
 
 int SerialComNode::SendData(int data_len) {

@@ -8,6 +8,7 @@ message SerialPortConfig {
     optional int32 stopbits = 5[default = 1];
     optional string parity = 6[default = 'N'];
     optional bool is_simulator = 7[default = false];
+    optional bool is_debug = 8[default = true];
 }
 
 

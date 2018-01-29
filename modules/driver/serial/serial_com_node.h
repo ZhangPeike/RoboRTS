@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -144,21 +145,23 @@ class SerialComNode : public rrts::common::RRTS {
 
   void DataHandle();
 
-  void SendDataHandle(uint16_t cmd_id, uint8_t *p_data, uint16_t len);
+  void SendDataHandle(uint16_t cmd_id, uint8_t *topack_data, uint8_t *packed_data, uint16_t len);
 
   int SendData(int data_len);
 
-  int fd_, baudrate_;
+  int fd_, baudrate_, length_, pack_length_, total_length_, free_length_;
   struct termios termios_options_;
   std::string port_;
-  std::thread *receive_loop_thread_;
-  std::mutex mutex_receive_, mutex_send_;
-  bool is_open_, stop_receive_, stop_send_, is_sim_;
+  std::thread *receive_loop_thread_, *send_loop_thread_;
+  std::mutex mutex_receive_, mutex_send_, mutex_pack_;
+  bool is_open_, stop_receive_, stop_send_, is_sim_, is_debug_;
+
   ros::NodeHandle nh_;
   //TODO(krik): use actionlib and add more subscribers, more publishers.
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
   void GimbalControlCallback(const messages::EnemyPosConstPtr &msg);
   void ChassisControlCallback(const geometry_msgs::Twist::ConstPtr &vel);
+  void SendPack();
   ros::Publisher odom_pub_;
   tf::TransformBroadcaster tf_broadcaster_;
   //TODO(krik): add the error code and node state
