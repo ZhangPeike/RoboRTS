@@ -13,3 +13,9 @@ target_link_libraries(serial_com_node
         ${PROTOBUF_LIBRARIES}
         ${GLOG_LIBRARY}
         )
+
+add_executable(fake_cmd_vel_node fake_cmd_vel.cpp)
+target_link_libraries(fake_cmd_vel_node
+        PRIVATE
+        ${catkin_LIBRARIES}
+        )

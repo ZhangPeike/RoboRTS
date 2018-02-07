@@ -256,7 +256,9 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
   time.tv_usec = 0;
   selected = select(fd + 1, &fs_read, NULL, NULL, &time);
   if (selected > 0) {
+    mutex_receive_.lock();
     received_length = read(fd, rx_buf_, data_length);
+    mutex_receive_.unlock();
   } else if (selected == 0) {
     received_length = 0;
   } else {
@@ -322,7 +324,9 @@ void SerialComNode::DataHandle() {
       odom_tf.transform.translation.y = y;
       odom_tf.transform.translation.z = 0.0;
       odom_tf.transform.rotation = q;
-      tf_broadcaster_.sendTransform(odom_tf);
+      if (!is_sim_) {
+        tf_broadcaster_.sendTransform(odom_tf);
+      }
     }
       break;
     case GIMBAL_DATA_ID: memcpy(&gimbal_information_, data_addr, data_length);
@@ -432,11 +436,11 @@ void SerialComNode::ChassisControlCallback(const geometry_msgs::Twist::ConstPtr 
   time_last = time_current;
   compress++;
   if (compress == COMPRESS_TIME) {
-    std::unique_lock<std::mutex> lock(mutex_pack_);
+    mutex_pack_.lock();
+    printf("Chassis callback is recycling %dms and %.1fHz\n", time_ms, frequency);
     compress = 0;
     uint8_t pack[PACK_MAX_SIZE];
     ChassisControl chassis_control_data;
-//TODO(Krik): get the effective command from the decision module
     chassis_control_data.ctrl_mode = AUTO_FOLLOW_GIMBAL;
     chassis_control_data.x_speed = vel->linear.x * 1000.0;
     chassis_control_data.y_speed = vel->linear.y * 1000.0;
@@ -452,6 +456,7 @@ void SerialComNode::ChassisControlCallback(const geometry_msgs::Twist::ConstPtr 
     } else {
       LOG_WARNING << "Overflow in Chassis CB";
     }
+    mutex_pack_.unlock();
   }
 }
 

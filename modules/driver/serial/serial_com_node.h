@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <semaphore.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
