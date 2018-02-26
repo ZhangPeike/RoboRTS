@@ -20,6 +20,7 @@
 #include "common/error_code.h"
 #include "common/node_state.h"
 #include "common/main_interface.h"
+#include "messages/GimbalAngle.h"
 #include "modules/driver/serial/infantry_info.h"
 #include "modules/driver/serial/proto/serial_com_config.pb.h"
 
@@ -223,7 +224,8 @@ class SerialComNode : public rrts::common::RRTS {
   ros::NodeHandle nh_;
   //TODO(krik): use actionlib and add more subscribers, more publishers.
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
-  ros::Publisher odom_pub_;
+  ros::Publisher odom_pub_, gim_pub_;
+  messages::GimbalAngle angle_;
   tf::TransformBroadcaster tf_broadcaster_;
   //TODO(krik): add the error code and node state
   rrts::common::ErrorCode error_code_;

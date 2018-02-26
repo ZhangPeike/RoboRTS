@@ -15,6 +15,7 @@ add_message_files(
   FILES
   EnemyPos.msg
   Odometry.msg
+  GimbalAngle.msg
 )
 
 generate_messages(

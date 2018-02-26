@@ -28,6 +28,7 @@ SerialComNode::SerialComNode(std::string module_name)
   total_length_ = 0;
   free_length_ = UART_BUFF_SIZE;
   odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 30);
+  gim_pub_ = nh_.advertise<messages::GimbalAngle>("gimbal", 30);
 }
 
 bool SerialComNode::Initialization() {
@@ -326,6 +327,9 @@ void SerialComNode::DataHandle() {
     }
       break;
     case GIMBAL_DATA_ID: memcpy(&gimbal_information_, data_addr, data_length);
+      angle_.pitch = gimbal_information_.pit_relative_angle / 180 * M_PI;
+      angle_.yaw = gimbal_information_.yaw_relative_angle / 180 * M_PI;
+      gim_pub_.publish(angle_);
       if (is_debug_) {
         LOG_INFO << "Gimbal info-->" << gimbal_information_.pit_relative_angle;
       }
