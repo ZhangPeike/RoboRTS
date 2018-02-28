@@ -330,6 +330,20 @@ void SerialComNode::DataHandle() {
       angle_.pitch = gimbal_information_.pit_relative_angle / 180 * M_PI;
       angle_.yaw = gimbal_information_.yaw_relative_angle / 180 * M_PI;
       gim_pub_.publish(angle_);
+//      <!-- The input reference frames -->
+//      <arg name="robot_base_frame" default="base_link" />
+//      <arg name="robot_effector_frame" default="tool0" />
+//      <arg name="tracking_base_frame" default="tracking_origin" />
+//      <arg name="tracking_marker_frame" default="tracking_target" />
+      geometry_msgs::Quaternion q = tf::createQuaternionMsgFromRollPitchYaw(0.0, angle_.pitch, angle_.yaw);
+      geometry_msgs::TransformStamped arm_tf;
+      arm_tf.header.frame_id = "base_link";
+      arm_tf.child_frame_id = "tool0";
+      ros::Time current_time = ros::Time::now();
+      arm_tf.header.stamp = current_time;
+      arm_tf.transform.rotation = q;
+      arm_tf.transform.translation.x = 0.0;
+
       if (is_debug_) {
         LOG_INFO << "Gimbal info-->" << gimbal_information_.pit_relative_angle;
       }
