@@ -16,6 +16,8 @@ SerialComNode::SerialComNode(std::string module_name)
   << "Error loading proto file for serial.";
   CHECK(serial_port_config.has_serial_port()) << "Port not set.";
   CHECK(serial_port_config.has_serial_boudrate()) << "Baudrate not set.";
+  length_beam_ = serial_port_config.link_beam();
+  length_column_ = serial_port_config.link_column();
   baudrate_ = serial_port_config.serial_boudrate();
   port_ = serial_port_config.serial_port();
   CHECK(Initialization()) << "Initialization error.";
@@ -268,6 +270,8 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
 }
 
 void SerialComNode::DataHandle() {
+  ros::Time current_time = ros::Time::now();
+  geometry_msgs::Quaternion q;
   std::lock_guard<std::mutex> guard(mutex_receive_);
   auto *p_header = (FrameHeader *) protocol_packet_;
   uint16_t data_length = p_header->data_length;
@@ -299,7 +303,6 @@ void SerialComNode::DataHandle() {
       if (is_debug_) {
         LOG_INFO << "Chassis bottom data is received.";
       }
-      ros::Time current_time = ros::Time::now();
       memcpy(&chassis_information_, data_addr, data_length);
       nav_msgs::Odometry odom;
       odom.header.stamp = current_time;
@@ -309,7 +312,7 @@ void SerialComNode::DataHandle() {
       odom.pose.pose.position.x = x;
       odom.pose.pose.position.y = y;
       odom.pose.pose.position.z = 0.0;
-      geometry_msgs::Quaternion q = tf::createQuaternionMsgFromYaw(chassis_information_.gyro_angle / 180.0 * M_PI);
+      q = tf::createQuaternionMsgFromYaw(chassis_information_.gyro_angle / 180.0 * M_PI);
       odom.pose.pose.orientation = q;
       odom.twist.twist.linear.x = (double) chassis_information_.x_speed / 1000.0;
       odom.twist.twist.linear.y = (double) chassis_information_.y_speed / 1000.0;
@@ -330,20 +333,18 @@ void SerialComNode::DataHandle() {
       angle_.pitch = gimbal_information_.pit_relative_angle / 180 * M_PI;
       angle_.yaw = gimbal_information_.yaw_relative_angle / 180 * M_PI;
       gim_pub_.publish(angle_);
-//      <!-- The input reference frames -->
-//      <arg name="robot_base_frame" default="base_link" />
-//      <arg name="robot_effector_frame" default="tool0" />
-//      <arg name="tracking_base_frame" default="tracking_origin" />
-//      <arg name="tracking_marker_frame" default="tracking_target" />
-      geometry_msgs::Quaternion q = tf::createQuaternionMsgFromRollPitchYaw(0.0, angle_.pitch, angle_.yaw);
-      geometry_msgs::TransformStamped arm_tf;
-      arm_tf.header.frame_id = "base_link";
-      arm_tf.child_frame_id = "tool0";
-      ros::Time current_time = ros::Time::now();
-      arm_tf.header.stamp = current_time;
-      arm_tf.transform.rotation = q;
-      arm_tf.transform.translation.x = 0.0;
-
+      q = tf::createQuaternionMsgFromRollPitchYaw(0.0, angle_.pitch, angle_.yaw);
+      arm_tf_.header.frame_id = "base_link";
+      arm_tf_.child_frame_id = "tool0";
+      arm_tf_.header.stamp = current_time;
+      arm_tf_.transform.rotation = q;
+      arm_tf_.transform.translation.x = length_beam_ * cos(angle_.pitch) * cos(angle_.yaw) / 1000;
+      arm_tf_.transform.translation.y = length_beam_ * cos(angle_.pitch) * sin(angle_.yaw) / 1000;
+      arm_tf_.transform.translation.z = (length_column_ + length_beam_ * sin(angle_.pitch)) / 1000;
+//      arm_tf_.transform.translation.x = 0;
+//      arm_tf_.transform.translation.y = 0;
+//      arm_tf_.transform.translation.z = 0;
+      tf_broadcaster_.sendTransform(arm_tf_);
       if (is_debug_) {
         LOG_INFO << "Gimbal info-->" << gimbal_information_.pit_relative_angle;
       }

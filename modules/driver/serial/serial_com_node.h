@@ -216,6 +216,7 @@ class SerialComNode : public rrts::common::RRTS {
   void SendPack();
 
   int fd_, baudrate_, length_, pack_length_, total_length_, free_length_, key_, valid_key_;
+  double length_column_, length_beam_;
   struct termios termios_options_, termios_options_original_;
   std::string port_;
   std::thread *receive_loop_thread_, *send_loop_thread_, *keyboard_in_;
@@ -226,6 +227,7 @@ class SerialComNode : public rrts::common::RRTS {
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
   ros::Publisher odom_pub_, gim_pub_;
   messages::GimbalAngle angle_;
+  geometry_msgs::TransformStamped arm_tf_;
   tf::TransformBroadcaster tf_broadcaster_;
   //TODO(krik): add the error code and node state
   rrts::common::ErrorCode error_code_;
