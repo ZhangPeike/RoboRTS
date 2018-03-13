@@ -32,8 +32,8 @@ SerialComNode::SerialComNode(std::string module_name)
   length_column_ = serial_port_config.link_column();
   baudrate_ = serial_port_config.serial_boudrate();
   port_ = serial_port_config.serial_port();
-  position_.header.frame_id = "uwb";
-  position_.header.seq = 0;
+  uwb_position_.header.frame_id = "uwb";
+  uwb_position_.header.seq = 0;
   CHECK(Initialization()) << "Initialization error.";
   is_open_ = true;
   stop_receive_ = false;
@@ -45,7 +45,7 @@ SerialComNode::SerialComNode(std::string module_name)
   free_length_ = UART_BUFF_SIZE;
   odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 30);
   gim_pub_ = nh_.advertise<messages::GimbalAngle>("gimbal", 30);
-  pose_pub_ = nh_.advertise<messages::PositionUWB>("uwb_pose", 30);
+  uwb_pose_pub_ = nh_.advertise<messages::PositionUWB>("uwb_pose", 30);
 }
 
 bool SerialComNode::Initialization() {
@@ -294,14 +294,14 @@ void SerialComNode::DataHandle() {
   uint8_t *data_addr = protocol_packet_ + HEADER_LEN + CMD_LEN;
   switch (cmd_id) {
     case GAME_INFO_ID: memcpy(&game_information_, data_addr, data_length);
-      position_.header.stamp = current_time;
-      position_.header.seq++;
-      position_.valid_flag = game_information_.position.valid_flag;
-      position_.x = game_information_.position.x;
-      position_.y = game_information_.position.y;
-      position_.z = game_information_.position.z;
-      position_.yaw = game_information_.position.yaw;
-      pose_pub_.publish(position_);
+      uwb_position_.header.stamp = current_time;
+      uwb_position_.header.seq++;
+      uwb_position_.valid_flag = game_information_.position.valid_flag;
+      uwb_position_.x = game_information_.position.x;
+      uwb_position_.y = game_information_.position.y;
+      uwb_position_.z = game_information_.position.z;
+      uwb_position_.yaw = game_information_.position.yaw;
+      uwb_pose_pub_.publish(uwb_position_);
       LOG_INFO << "Game info OK";
       if (is_debug_) {
         LOG_INFO << "Game remaining blood: " << game_information_.remain_hp;
@@ -354,17 +354,17 @@ void SerialComNode::DataHandle() {
     }
       break;
     case GIMBAL_DATA_ID: memcpy(&gimbal_information_, data_addr, data_length);
-      angle_.pitch = gimbal_information_.pit_relative_angle / 180 * M_PI;
-      angle_.yaw = gimbal_information_.yaw_relative_angle / 180 * M_PI;
-      gim_pub_.publish(angle_);
-      q = tf::createQuaternionMsgFromRollPitchYaw(0.0, angle_.pitch, angle_.yaw);
+      gim_angle_.pitch = gimbal_information_.pit_relative_angle / 180 * M_PI;
+      gim_angle_.yaw = gimbal_information_.yaw_relative_angle / 180 * M_PI;
+      gim_pub_.publish(gim_angle_);
+      q = tf::createQuaternionMsgFromRollPitchYaw(0.0, gim_angle_.pitch, gim_angle_.yaw);
       arm_tf_.header.frame_id = "base_link";
       arm_tf_.child_frame_id = "tool0";
       arm_tf_.header.stamp = current_time;
       arm_tf_.transform.rotation = q;
-      arm_tf_.transform.translation.x = length_beam_ * cos(angle_.pitch) * cos(angle_.yaw) / 1000;
-      arm_tf_.transform.translation.y = length_beam_ * cos(angle_.pitch) * sin(angle_.yaw) / 1000;
-      arm_tf_.transform.translation.z = (length_column_ + length_beam_ * sin(angle_.pitch)) / 1000;
+      arm_tf_.transform.translation.x = length_beam_ * cos(gim_angle_.pitch) * cos(gim_angle_.yaw) / 1000;
+      arm_tf_.transform.translation.y = length_beam_ * cos(gim_angle_.pitch) * sin(gim_angle_.yaw) / 1000;
+      arm_tf_.transform.translation.z = (length_column_ + length_beam_ * sin(gim_angle_.pitch)) / 1000;
 //      arm_tf_.transform.translation.x = 0;
 //      arm_tf_.transform.translation.y = 0;
 //      arm_tf_.transform.translation.z = 0;

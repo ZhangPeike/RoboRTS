@@ -246,11 +246,11 @@ class SerialComNode : public rrts::common::RRTS {
   ros::NodeHandle nh_;
   //TODO(krik): use actionlib and add more subscribers, more publishers.
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
-  ros::Publisher odom_pub_, gim_pub_, pose_pub_;
-  messages::GimbalAngle angle_;
+  ros::Publisher odom_pub_, gim_pub_, uwb_pose_pub_;
+  messages::GimbalAngle gim_angle_;
   geometry_msgs::TransformStamped arm_tf_;
   tf::TransformBroadcaster tf_broadcaster_;
-  messages::PositionUWB position_;
+  messages::PositionUWB uwb_position_;
   //TODO(krik): add the error code and node state
   rrts::common::ErrorCode error_code_;
   rrts::common::NodeState node_state_;
