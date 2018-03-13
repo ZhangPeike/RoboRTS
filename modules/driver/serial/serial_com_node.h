@@ -1,3 +1,20 @@
+/****************************************************************************
+ *  Copyright (C) 2018 RoboMaster.
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of 
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
+ ***************************************************************************/
+
 #ifndef MODULES_DRIVER_SERIAL_SERIAL_COM_NODE_H
 #define MODULES_DRIVER_SERIAL_SERIAL_COM_NODE_H
 
@@ -21,6 +38,7 @@
 #include "common/node_state.h"
 #include "common/main_interface.h"
 #include "messages/GimbalAngle.h"
+#include "messages/PositionUWB.h"
 #include "modules/driver/serial/infantry_info.h"
 #include "modules/driver/serial/proto/serial_com_config.pb.h"
 
@@ -225,10 +243,11 @@ class SerialComNode : public rrts::common::RRTS {
   ros::NodeHandle nh_;
   //TODO(krik): use actionlib and add more subscribers, more publishers.
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
-  ros::Publisher odom_pub_, gim_pub_;
+  ros::Publisher odom_pub_, gim_pub_, pose_pub_;
   messages::GimbalAngle angle_;
   geometry_msgs::TransformStamped arm_tf_;
   tf::TransformBroadcaster tf_broadcaster_;
+  messages::PositionUWB position_;
   //TODO(krik): add the error code and node state
   rrts::common::ErrorCode error_code_;
   rrts::common::NodeState node_state_;
@@ -240,7 +259,6 @@ class SerialComNode : public rrts::common::RRTS {
   int32_t read_len_, read_buff_index_, index_;
   GimbalControl gimbal_control_data_;
   ChassisControl chassis_control_data_;
-
   FrameHeader computer_frame_header_;
   GameInfo game_information_;
   HurtData robot_hurt_data_;

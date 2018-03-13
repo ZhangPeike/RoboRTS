@@ -1,28 +1,29 @@
 project(messages)
 
 add_action_files(
-  DIRECTORY action
-  FILES
-  example.action
-  LocalPlanner.action
-  GlobalPlanner.action
-  ArmorDetection.action
-  Localization.action
+    DIRECTORY action
+    FILES
+    example.action
+    LocalPlanner.action
+    GlobalPlanner.action
+    ArmorDetection.action
+    Localization.action
 )
 
 add_message_files(
-  DIRECTORY msg
-  FILES
-  EnemyPos.msg
-  Odometry.msg
-  GimbalAngle.msg
+    DIRECTORY msg
+    FILES
+    EnemyPos.msg
+    Odometry.msg
+    GimbalAngle.msg
+    PositionUWB.msg
 )
 
 generate_messages(
-  DEPENDENCIES
-  std_msgs
-  geometry_msgs
-  nav_msgs
+    DEPENDENCIES
+    std_msgs
+    geometry_msgs
+    nav_msgs
 )
 
-set(msg_INCLUDE_DIRS "${messages_INCLUDE_DIRS}" CACHE  INTERNAL "messages Library location")
+set(msg_INCLUDE_DIRS "${messages_INCLUDE_DIRS}" CACHE INTERNAL "messages Library location")

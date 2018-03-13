@@ -1,9 +1,25 @@
-#include <time.h>
+/****************************************************************************
+ *  Copyright (C) 2018 RoboMaster.
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of 
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
+ ***************************************************************************/
+
+#include <ctime>
 #include <cmath>
-#include <sys/time.h>
 #include <messages/EnemyPos.h>
 #include "modules/driver/serial/serial_com_node.h"
-#include "infantry_info.h"
+#include "modules/driver/serial/infantry_info.h"
 
 namespace rrts {
 namespace driver {
@@ -20,6 +36,8 @@ SerialComNode::SerialComNode(std::string module_name)
   length_column_ = serial_port_config.link_column();
   baudrate_ = serial_port_config.serial_boudrate();
   port_ = serial_port_config.serial_port();
+  position_.header.frame_id = "uwb";
+  position_.header.seq = 0;
   CHECK(Initialization()) << "Initialization error.";
   is_open_ = true;
   stop_receive_ = false;
@@ -31,6 +49,7 @@ SerialComNode::SerialComNode(std::string module_name)
   free_length_ = UART_BUFF_SIZE;
   odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 30);
   gim_pub_ = nh_.advertise<messages::GimbalAngle>("gimbal", 30);
+  pose_pub_ = nh_.advertise<messages::PositionUWB>("uwb_pose", 30);
 }
 
 bool SerialComNode::Initialization() {
@@ -201,7 +220,7 @@ void SerialComNode::ReceiveLoop() {
             protocol_packet_[index_++] = byte_;
             bool crc8_result = VerifyCrcOctCheckSum(protocol_packet_, HEADER_LEN);
             if (!crc8_result) {
-              LOG_WARNING << "****************CRC 8 error>>>>>>>>>>>>>>>>>";
+              LOG_WARNING << "CRC 8 error";
             }
             if ((index_ == HEADER_LEN) && crc8_result) {
               if (index_ < HEADER_LEN) {
@@ -226,7 +245,7 @@ void SerialComNode::ReceiveLoop() {
               if (VerifyCrcHexCheckSum(protocol_packet_, HEADER_LEN + CMD_LEN + data_length_ + CRC_LEN)) {
                 DataHandle();
               } else {
-                LOG_WARNING << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>CRC16 INVALID<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
+                LOG_WARNING << "CRC16 error";
               }
             }
           }
@@ -279,6 +298,15 @@ void SerialComNode::DataHandle() {
   uint8_t *data_addr = protocol_packet_ + HEADER_LEN + CMD_LEN;
   switch (cmd_id) {
     case GAME_INFO_ID: memcpy(&game_information_, data_addr, data_length);
+      position_.header.stamp = current_time;
+      position_.header.seq++;
+      position_.valid_flag = game_information_.position.valid_flag;
+      position_.x = game_information_.position.x;
+      position_.y = game_information_.position.y;
+      position_.z = game_information_.position.z;
+      position_.yaw = game_information_.position.yaw;
+      pose_pub_.publish(position_);
+      LOG_INFO << "Game info OK";
       if (is_debug_) {
         LOG_INFO << "Game remaining blood: " << game_information_.remain_hp;
       }
@@ -384,7 +412,10 @@ void SerialComNode::DataHandle() {
         printf("Bottom Version-->%d\n", version_info_data_.num[0]);
       }
       break;
-    default:LOG_WARNING << "ID is beyond defined";
+    default:
+      if (is_debug_) {
+        LOG_WARNING << "ID is beyond defined";
+      }
       break;
   }
 }
