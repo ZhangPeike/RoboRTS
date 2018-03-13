@@ -15,11 +15,7 @@
  *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  ***************************************************************************/
 
-#include <ctime>
-#include <cmath>
-#include <messages/EnemyPos.h>
 #include "modules/driver/serial/serial_com_node.h"
-#include "modules/driver/serial/infantry_info.h"
 
 namespace rrts {
 namespace driver {

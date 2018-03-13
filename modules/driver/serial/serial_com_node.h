@@ -18,6 +18,8 @@
 #ifndef MODULES_DRIVER_SERIAL_SERIAL_COM_NODE_H
 #define MODULES_DRIVER_SERIAL_SERIAL_COM_NODE_H
 
+#include <ctime>
+#include <cmath>
 #include <fcntl.h>
 #include <termios.h>
 #include <semaphore.h>
@@ -39,6 +41,7 @@
 #include "common/main_interface.h"
 #include "messages/GimbalAngle.h"
 #include "messages/PositionUWB.h"
+#include "messages/EnemyPos.h"
 #include "modules/driver/serial/infantry_info.h"
 #include "modules/driver/serial/proto/serial_com_config.pb.h"
 
