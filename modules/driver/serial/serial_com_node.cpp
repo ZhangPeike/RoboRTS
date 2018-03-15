@@ -60,9 +60,21 @@ bool SerialComNode::SerialInitialization(std::string port,
                                          int parity) {
   fd_ = open(port.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
   CHECK(fd_ != -1) << "Serial port open failed!";
-  CHECK(tcgetattr(fd_, &termios_options_) == 0) << "Get serial attributes error!";
+  CHECK(tcgetattr(fd_, &termios_options_) == 0) << "1st Time Get serial attributes error!";
   termios_options_original_ = termios_options_;
   ConfigBaudrate(baudrate);
+  switch (data_bits) {
+    case 5 :termios_options_.c_cflag |= CS5;
+      break;
+    case 6 :termios_options_.c_cflag |= CS6;
+      break;
+    case 7 :termios_options_.c_cflag |= CS7;
+      break;
+    case 8 :termios_options_.c_cflag |= CS8;
+      break;
+    default: LOG_FATAL << "Unsupported data size";
+      return false;
+  }
   termios_options_.c_cflag |= CLOCAL;
   termios_options_.c_cflag |= CREAD;
   termios_options_.c_cflag &= ~CSIZE;
@@ -76,22 +88,10 @@ bool SerialComNode::SerialInitialization(std::string port,
     default: termios_options_.c_cflag &= ~CRTSCTS;
       break;
   }
-  switch (data_bits) {
-    case 5 :termios_options_.c_cflag |= CS5;
-      break;
-    case 6 :termios_options_.c_cflag |= CS6;
-      break;
-    case 7 :termios_options_.c_cflag |= CS7;
-      break;
-    case 8 :termios_options_.c_cflag |= CS8;
-      break;
-    default: LOG_FATAL << "Unsupported data size";
-      return false;
-  }
   switch (parity) {
     case 'n':
     case 'N':termios_options_.c_cflag &= ~(PARENB | PARODD);
-      termios_options_.c_iflag &= ~INPCK;
+//      termios_options_.c_iflag &= ~INPCK;
       break;
     case 'o':
     case 'O':termios_options_.c_cflag |= (PARODD | PARENB);
@@ -117,16 +117,19 @@ bool SerialComNode::SerialInitialization(std::string port,
     default: LOG_FATAL << "Unsupported stop bits";
       return false;
   }
+  termios_options_.c_iflag = IGNBRK;
+  termios_options_.c_iflag &= ~(IXON | IXOFF | IXANY);
   termios_options_.c_lflag = 0;
   termios_options_.c_oflag = 0;
-  termios_options_.c_oflag &= ~OPOST;
-  termios_options_.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
   termios_options_.c_cc[VTIME] = 1;
   termios_options_.c_cc[VMIN] = 60;
-  termios_options_.c_iflag = IGNBRK;
   CHECK_EQ(tcsetattr(fd_, TCSANOW, &termios_options_), 0)
     << "Set serial attributes error!";
   LOG_INFO << "Com config success";
+  int mcs = 0;
+  ioctl(fd_, TIOCMGET, &mcs);
+  mcs |= TIOCM_RTS;
+  ioctl(fd_, TIOCMSET, &mcs);
   return true;
 }
 
@@ -275,6 +278,7 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
   selected = select(fd + 1, &fs_read, NULL, NULL, &time);
   if (selected > 0) {
     received_length = read(fd, rx_buf_, data_length);
+
   } else if (selected == 0) {
     received_length = 0;
   } else {

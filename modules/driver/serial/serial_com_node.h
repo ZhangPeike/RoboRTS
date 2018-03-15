@@ -20,8 +20,9 @@
 
 #include <ctime>
 #include <cmath>
-#include <fcntl.h>
-#include <termios.h>
+#include <sys/ioctl.h>
+#include <sys/fcntl.h>
+#include <sys/termios.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
