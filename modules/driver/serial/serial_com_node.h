@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <fstream>
 #include <string>
 #include <mutex>
 #include <thread>
@@ -237,6 +238,7 @@ class SerialComNode : public rrts::common::RRTS {
    */
   void SendPack();
 
+  FILE * fp_;
   int fd_, baudrate_, length_, pack_length_, total_length_, free_length_, key_, valid_key_;
   double length_column_, length_beam_;
   struct termios termios_options_, termios_options_original_;
