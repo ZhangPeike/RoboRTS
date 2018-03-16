@@ -40,13 +40,16 @@ SerialComNode::SerialComNode(std::string module_name)
   stop_send_ = false;
   is_sim_ = serial_port_config.is_simulator();
   is_debug_ = serial_port_config.is_debug();
+  is_debug_tx_ = serial_port_config.is_debug_tx();
   pack_length_ = 0;
   total_length_ = 0;
   free_length_ = UART_BUFF_SIZE;
   odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 30);
   gim_pub_ = nh_.advertise<messages::GimbalAngle>("gimbal", 30);
   uwb_pose_pub_ = nh_.advertise<messages::PositionUWB>("uwb_pose", 30);
-  fp_ = fopen("debug_com.txt", "w+");
+  if (is_debug_) {
+    fp_ = fopen("debug_com.txt", "w+");
+  }
 }
 
 bool SerialComNode::Initialization() {
@@ -136,8 +139,8 @@ bool SerialComNode::SerialInitialization(std::string port,
 
 bool SerialComNode::ConfigBaudrate(int baudrate) {
   int i;
-  int speed_arr[] = {B921600, B115200, B19200, B9600, B4800, B2400, B1200, B300};
-  int name_arr[] = {921600, 115200, 19200, 9600, 4800, 2400, 1200, 300};
+  int speed_arr[] = {B921600, B576000, B460800, B230400, B115200, B19200, B9600, B4800, B2400, B1200, B300};
+  int name_arr[] = {921600, 576000, 460800, 230400, 115200, 19200, 9600, 4800, 2400, 1200, 300};
   for (i = 0; i < sizeof(speed_arr) / sizeof(int); i++) {
     if (baudrate == name_arr[i]) {
       cfsetispeed(&termios_options_, speed_arr[i]);
@@ -180,7 +183,6 @@ void SerialComNode::ReceiveLoop() {
   while (is_open_ && !stop_receive_ && ros::ok()) {
     read_buff_index_ = 0;
     read_len_ = ReceiveData(fd_, UART_BUFF_SIZE);
-
     if (read_len_ > 0) {
       while (read_len_--) {
         byte_ = rx_buf_[read_buff_index_++];
@@ -283,8 +285,9 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
     int count = received_length;
     int p = 0;
     if (is_debug_) {
+      fprintf(fp_, "%d,", received_length);
       while (count--) {
-        fprintf(fp_, "%02x ", rx_buf_[p++]);
+        fprintf(fp_, "%d,", rx_buf_[p++]);
       }
       fprintf(fp_, "\n");
 //    fwrite(rx_buf_, sizeof(uint8_t), received_length, fp_);
@@ -380,9 +383,6 @@ void SerialComNode::DataHandle() {
       arm_tf_.transform.translation.x = length_beam_ * cos(gim_angle_.pitch) * cos(gim_angle_.yaw) / 1000;
       arm_tf_.transform.translation.y = length_beam_ * cos(gim_angle_.pitch) * sin(gim_angle_.yaw) / 1000;
       arm_tf_.transform.translation.z = (length_column_ + length_beam_ * sin(gim_angle_.pitch)) / 1000;
-//      arm_tf_.transform.translation.x = 0;
-//      arm_tf_.transform.translation.y = 0;
-//      arm_tf_.transform.translation.z = 0;
       tf_broadcaster_.sendTransform(arm_tf_);
       if (is_debug_) {
         LOG_INFO << "Gimbal info-->" << gimbal_information_.pit_relative_angle;
@@ -531,16 +531,57 @@ void SerialComNode::SendDataHandle(uint16_t cmd_id,
 }
 
 void SerialComNode::SendPack() {
-  while (is_open_ && !stop_send_ && ros::ok()) {
-    if (total_length_ > 0) {
-      mutex_send_.lock();
-      int result = SendData(total_length_);
-      printf("Com send OK and length: %d\n", result);
-      total_length_ = 0;
-      free_length_ = UART_BUFF_SIZE;
-      mutex_send_.unlock();
-    } else {
-      usleep(100);
+  if (is_debug_tx_) {
+//    FILE *fp = fopen("debug_com.txt", "r");
+//    if (fp == nullptr) {
+//      LOG_ERROR << "Error open source txt.";
+//    }
+
+//    char *buffer;
+//    ssize_t read_length;
+//    size_t length;
+//    while ((read_length = getline(&buffer, &length, fp)) != -1) {
+//      for (int i = 0; i < length; i++) {
+//        tx_buf_[i] = static_cast<unsigned char> (buffer[i]);
+//      }
+//      SendData(length);
+//      LOG_INFO << "Sent data from file length: " << length;
+//    }
+//    int count = 0;
+//    std::filebuf filebuf;
+//    std::string str_num;
+//    if (filebuf.open("debug_com.txt", std::ios_base::in)) {
+//      std::istream file_stream(&filebuf);
+//      while (std::getline(file_stream, str_num, ',')) {
+//        int num = std::stoi(str_num);
+//        for (int i = 0; i < num; i++) {
+//          getline(file_stream, str_num, ',');
+//          tx_buf_[count++] = static_cast<unsigned char>(std::stoi(str_num));
+//        }
+//        SendData(num);
+//        getline(file_stream, str_num, '\n');
+//      }
+//    }
+    for (int i = 0; i < 9; i++) {
+      tx_buf_[i] = i;
+    }
+    ros::Rate rate(200);
+    while (ros::ok()) {
+      SendData(9);
+      rate.sleep();
+    }
+  } else {
+    while (is_open_ && !stop_send_ && ros::ok()) {
+      if (total_length_ > 0) {
+        mutex_send_.lock();
+        int result = SendData(total_length_);
+        printf("Com send OK and length: %d\n", result);
+        total_length_ = 0;
+        free_length_ = UART_BUFF_SIZE;
+        mutex_send_.unlock();
+      } else {
+        usleep(100);
+      }
     }
   }
 }
@@ -548,10 +589,11 @@ void SerialComNode::SendPack() {
 int SerialComNode::SendData(int data_len) {
   int length = 0;
   length = write(fd_, tx_buf_, data_len);
+  write(fd_, "\n", 1);
   if (length == data_len) {
     return length;
   } else {
-    LOG_FATAL << "Serial write error";
+    LOG_WARNING << "Serial write error";
     return -1;
   }
 }
@@ -570,7 +612,9 @@ SerialComNode::~SerialComNode() {
   tcsetattr(fd_, TCSANOW, &termios_options_original_);
   close(fd_);
   is_open_ = false;
-  fclose(fp_);
+  if (is_debug_) {
+    fclose(fp_);
+  }
 }
 
 void SerialComNode::Stop() {

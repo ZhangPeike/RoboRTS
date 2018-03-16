@@ -245,7 +245,7 @@ class SerialComNode : public rrts::common::RRTS {
   std::string port_;
   std::thread *receive_loop_thread_, *send_loop_thread_, *keyboard_in_;
   std::mutex mutex_receive_, mutex_send_, mutex_pack_;
-  bool is_open_, stop_receive_, stop_send_, is_sim_, is_debug_;
+  bool is_open_, stop_receive_, stop_send_, is_sim_, is_debug_, is_debug_tx_;
   ros::NodeHandle nh_;
   //TODO(krik): use actionlib and add more subscribers, more publishers.
   ros::Subscriber sub_cmd_vel_, sub_cmd_gim_;
