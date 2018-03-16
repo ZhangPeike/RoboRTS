@@ -46,6 +46,7 @@ SerialComNode::SerialComNode(std::string module_name)
   odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 30);
   gim_pub_ = nh_.advertise<messages::GimbalAngle>("gimbal", 30);
   uwb_pose_pub_ = nh_.advertise<messages::PositionUWB>("uwb_pose", 30);
+  fp_ = fopen("debug_com.txt", "w+");
 }
 
 bool SerialComNode::Initialization() {
@@ -179,6 +180,7 @@ void SerialComNode::ReceiveLoop() {
   while (is_open_ && !stop_receive_ && ros::ok()) {
     read_buff_index_ = 0;
     read_len_ = ReceiveData(fd_, UART_BUFF_SIZE);
+
     if (read_len_ > 0) {
       while (read_len_--) {
         byte_ = rx_buf_[read_buff_index_++];
@@ -278,7 +280,16 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
   selected = select(fd + 1, &fs_read, NULL, NULL, &time);
   if (selected > 0) {
     received_length = read(fd, rx_buf_, data_length);
-
+    int count = received_length;
+    int p = 0;
+    if (is_debug_) {
+      while (count--) {
+        fprintf(fp_, "%02x ", rx_buf_[p++]);
+      }
+      fprintf(fp_, "\n");
+//    fwrite(rx_buf_, sizeof(uint8_t), received_length, fp_);
+      fflush(fp_);
+    }
   } else if (selected == 0) {
     received_length = 0;
   } else {
@@ -559,6 +570,7 @@ SerialComNode::~SerialComNode() {
   tcsetattr(fd_, TCSANOW, &termios_options_original_);
   close(fd_);
   is_open_ = false;
+  fclose(fp_);
 }
 
 void SerialComNode::Stop() {
