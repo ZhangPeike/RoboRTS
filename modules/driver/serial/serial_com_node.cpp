@@ -589,7 +589,8 @@ void SerialComNode::SendPack() {
 int SerialComNode::SendData(int data_len) {
   int length = 0;
   length = write(fd_, tx_buf_, data_len);
-  write(fd_, "\n", 1);
+  lseek(fd_, 0, SEEK_CUR);
+  std::cout << "Com sending: " << length << std::endl;
   if (length == data_len) {
     return length;
   } else {
