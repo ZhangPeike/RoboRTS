@@ -40,7 +40,6 @@ SerialComNode::SerialComNode(std::string module_name)
   stop_send_ = false;
   is_sim_ = serial_port_config.is_simulator();
   is_debug_ = serial_port_config.is_debug();
-  is_debug_tx_ = serial_port_config.is_debug_tx();
   pack_length_ = 0;
   total_length_ = 0;
   free_length_ = UART_BUFF_SIZE;
@@ -287,7 +286,7 @@ int SerialComNode::ReceiveData(int fd, int data_length) {
     if (is_debug_) {
       fprintf(fp_, "%d,", received_length);
       while (count--) {
-        fprintf(fp_, "%d,", rx_buf_[p++]);
+        fprintf(fp_, "%x,", rx_buf_[p++]);
       }
       fprintf(fp_, "\n");
 //    fwrite(rx_buf_, sizeof(uint8_t), received_length, fp_);
@@ -424,9 +423,6 @@ void SerialComNode::DataHandle() {
       }
       break;
     default:
-      if (is_debug_) {
-        LOG_WARNING << "ID is beyond defined";
-      }
       break;
   }
 }
@@ -531,57 +527,15 @@ void SerialComNode::SendDataHandle(uint16_t cmd_id,
 }
 
 void SerialComNode::SendPack() {
-  if (is_debug_tx_) {
-//    FILE *fp = fopen("debug_com.txt", "r");
-//    if (fp == nullptr) {
-//      LOG_ERROR << "Error open source txt.";
-//    }
-
-//    char *buffer;
-//    ssize_t read_length;
-//    size_t length;
-//    while ((read_length = getline(&buffer, &length, fp)) != -1) {
-//      for (int i = 0; i < length; i++) {
-//        tx_buf_[i] = static_cast<unsigned char> (buffer[i]);
-//      }
-//      SendData(length);
-//      LOG_INFO << "Sent data from file length: " << length;
-//    }
-//    int count = 0;
-//    std::filebuf filebuf;
-//    std::string str_num;
-//    if (filebuf.open("debug_com.txt", std::ios_base::in)) {
-//      std::istream file_stream(&filebuf);
-//      while (std::getline(file_stream, str_num, ',')) {
-//        int num = std::stoi(str_num);
-//        for (int i = 0; i < num; i++) {
-//          getline(file_stream, str_num, ',');
-//          tx_buf_[count++] = static_cast<unsigned char>(std::stoi(str_num));
-//        }
-//        SendData(num);
-//        getline(file_stream, str_num, '\n');
-//      }
-//    }
-    for (int i = 0; i < 9; i++) {
-      tx_buf_[i] = i;
-    }
-    ros::Rate rate(200);
-    while (ros::ok()) {
-      SendData(9);
-      rate.sleep();
-    }
-  } else {
-    while (is_open_ && !stop_send_ && ros::ok()) {
-      if (total_length_ > 0) {
-        mutex_send_.lock();
-        int result = SendData(total_length_);
-        printf("Com send OK and length: %d\n", result);
-        total_length_ = 0;
-        free_length_ = UART_BUFF_SIZE;
-        mutex_send_.unlock();
-      } else {
-        usleep(100);
-      }
+  while (is_open_ && !stop_send_ && ros::ok()) {
+    if (total_length_ > 0) {
+      mutex_send_.lock();
+      SendData(total_length_);
+      total_length_ = 0;
+      free_length_ = UART_BUFF_SIZE;
+      mutex_send_.unlock();
+    } else {
+      usleep(100);
     }
   }
 }
