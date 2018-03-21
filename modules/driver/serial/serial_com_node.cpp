@@ -16,6 +16,7 @@
  ***************************************************************************/
 
 #include "modules/driver/serial/serial_com_node.h"
+#include "infantry_info.h"
 
 namespace rrts {
 namespace driver {
@@ -463,6 +464,7 @@ void SerialComNode::GimbalControlCallback(const messages::EnemyPosConstPtr &msg)
   }
   gimbal_control_data.pit_ref = msg->enemy_pitch * 180 / M_PI;
   gimbal_control_data.yaw_ref = msg->enemy_yaw * 180 / M_PI;
+  gimbal_control_data.distance = msg->enemy_dist;
   gimbal_control_data.visual_valid = 1;
   int length = sizeof(GimbalControl), total_length = length + HEADER_LEN + CMD_LEN + CRC_LEN;
   SendDataHandle(GIMBAL_CTRL_ID, (uint8_t *) &gimbal_control_data, pack, length);

@@ -408,6 +408,7 @@ typedef struct {
   uint8_t ctrl_mode;    /* gimbal control mode */
   float pit_ref;      /* gimbal pitch reference angle(degree) */
   float yaw_ref;      /* gimbal yaw reference angle(degree) */
+  float distance;     /* enemy distance */
   uint8_t visual_valid; /* visual information valid or not */
 } __attribute__((packed)) GimbalControl;
 
