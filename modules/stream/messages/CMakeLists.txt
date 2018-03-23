@@ -11,12 +11,12 @@ add_action_files(
 )
 
 add_message_files(
-    DIRECTORY msg
-    FILES
-    EnemyPos.msg
-    Odometry.msg
-    GimbalAngle.msg
-    PositionUWB.msg
+  DIRECTORY msg
+  FILES
+  EnemyPos.msg
+  Odometry.msg
+  GimbalAngle.msg
+  PositionUWB.msg
 )
 
 generate_messages(

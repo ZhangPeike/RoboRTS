@@ -53,6 +53,7 @@
  * Author: Christoph Rösmann
  *********************************************************************/
 
+#include <modules/perception/map/costmap/costmap_interface.h>
 #include "modules/planning/local_planner/timed_elastic_band/teb_local_planner.h"
 
 namespace rrts {
@@ -125,7 +126,11 @@ rrts::common::ErrorInfo TebLocalPlanner::ComputeVelocityCommands(geometry_msgs::
   tf::poseStampedMsgToTF(transformed_plan_.poses.back(), goal_point);
   robot_goal_.GetPosition().coeffRef(0) = goal_point.getOrigin().getX();
   robot_goal_.GetPosition().coeffRef(1) = goal_point.getOrigin().getY();
-  if (global_plan_overwrite_orientation_) {
+
+  if (global_plan_.poses.size() - goal_idx < 5) {
+    robot_goal_.GetTheta() = tf::getYaw(global_plan_.poses.back().pose.orientation);
+    transformed_plan_.poses.back().pose.orientation = tf::createQuaternionMsgFromYaw(robot_goal_.GetTheta());
+  } else if (global_plan_overwrite_orientation_) {
     robot_goal_.GetTheta() = EstimateLocalGoalOrientation(goal_point, goal_idx);
     transformed_plan_.poses.back().pose.orientation = tf::createQuaternionMsgFromYaw(robot_goal_.GetTheta());
   } else {
@@ -190,9 +195,6 @@ rrts::common::ErrorInfo TebLocalPlanner::ComputeVelocityCommands(geometry_msgs::
 
 bool TebLocalPlanner::IsGoalReached () {
 
-  geometry_msgs::PoseStamped a;
-
-
   tf::Stamped<tf::Pose> global_goal;
   tf::poseStampedMsgToTF(global_plan_.poses.back(), global_goal);
   global_goal.setData( plan_to_global_transform_ * global_goal );
@@ -200,6 +202,7 @@ bool TebLocalPlanner::IsGoalReached () {
 
   auto distance = (goal.first - robot_pose_.GetPosition()).norm();
   double delta_orient = g2o::normalize_theta( goal.second - robot_pose_.GetTheta());
+
   if (distance < xy_goal_tolerance_
       && fabs(delta_orient) < yaw_goal_tolerance_) {
     LOG_INFO << "goal reached";
@@ -239,7 +242,7 @@ bool TebLocalPlanner::PruneGlobalPlan() {
     for (auto iterator = global_plan_.poses.begin(); iterator != global_plan_.poses.end(); ++iterator) {
       Eigen::Vector2d temp_vector (robot.getOrigin().x() - iterator->pose.position.x,
                                    robot.getOrigin().y() - iterator->pose.position.y);
-      if (robot_to_goal.dot(temp_vector) > 0) {
+      if (temp_vector.norm() < 0.8) {
         if (iterator == global_plan_.poses.begin()) {
           break;
         }
@@ -278,11 +281,11 @@ bool TebLocalPlanner::TransformGlobalPlan(int *current_goal_idx) {
     int i = 0;
     double sq_dist_threshold = dist_threshold * dist_threshold;
     double sq_dist = 1e10;
-
+    double new_sq_dist = 0;
     while (i < (int)global_plan_.poses.size()) {
       double x_diff = robot_pose.getOrigin().x() - global_plan_.poses[i].pose.position.x;
       double y_diff = robot_pose.getOrigin().y() - global_plan_.poses[i].pose.position.y;
-      double new_sq_dist = x_diff * x_diff + y_diff * y_diff;
+      new_sq_dist = x_diff * x_diff + y_diff * y_diff;
       if (new_sq_dist > sq_dist && sq_dist < sq_dist_threshold) {
         sq_dist = new_sq_dist;
         break;
@@ -443,11 +446,11 @@ void TebLocalPlanner::UpdateViaPointsContainer() {
 }
 
 void TebLocalPlanner::UpdateRobotPose() {
-  rrts::perception::map::RobotPose robot_pose;
-  local_cost_.lock()->GetRobotPose(robot_pose);
-  auto temp_pose = DataConverter::LocalConvertRMData(robot_pose);
-  robot_pose_ = DataBase(temp_pose.first, temp_pose.second);
   local_cost_.lock()->GetRobotPose(robot_tf_pose_);
+  Eigen::Vector2d position;
+  position.coeffRef(0) = robot_tf_pose_.getOrigin().getX();
+  position.coeffRef(1) = robot_tf_pose_.getOrigin().getY();
+  robot_pose_ = DataBase(position, tf::getYaw(robot_tf_pose_.getRotation()));
 }
 
 void TebLocalPlanner::UpdateRobotVel() {
@@ -594,11 +597,20 @@ bool TebLocalPlanner::SetPlanOrientation() {
     LOG_WARNING << "can not compute the orientation because the global plan size is: " << global_plan_.poses.size();
     return false;
   } else {
-    auto goal = DataConverter::LocalConvertGData(global_plan_.poses.back().pose);
-    auto line_vector = (robot_pose_.GetPosition() - goal.first);
-    auto  orientation = GetOrientation(line_vector);
-    for (int i = 0; i < global_plan_.poses.size(); ++i) {
+    //auto goal = DataConverter::LocalConvertGData(global_plan_.poses.back().pose);
+    //auto line_vector = (robot_pose_.GetPosition() - goal.first);
+    //auto  orientation = GetOrientation(line_vector);
+    for (int i = 0; i < global_plan_.poses.size() - 1; ++i) {
       auto pose = DataConverter::LocalConvertGData(global_plan_.poses[i].pose);
+      auto next_pose = DataConverter::LocalConvertGData(global_plan_.poses[i+1].pose);
+      double x = global_plan_.poses[i+1].pose.position.x - global_plan_.poses[i].pose.position.x;
+      double y = global_plan_.poses[i+1].pose.position.y - global_plan_.poses[i].pose.position.y;
+      double angle = atan2(y, x);
+      auto quaternion = EulerToQuaternion(0, 0, angle);
+      global_plan_.poses[i].pose.orientation.w = quaternion[0];
+      global_plan_.poses[i].pose.orientation.x = quaternion[1];
+      global_plan_.poses[i].pose.orientation.y = quaternion[2];
+      global_plan_.poses[i].pose.orientation.z = quaternion[3];
     }
   }
 }

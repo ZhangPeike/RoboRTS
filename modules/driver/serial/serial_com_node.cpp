@@ -16,7 +16,6 @@
  ***************************************************************************/
 
 #include "modules/driver/serial/serial_com_node.h"
-#include "infantry_info.h"
 
 namespace rrts {
 namespace driver {
@@ -496,7 +495,8 @@ void SerialComNode::ChassisControlCallback(const geometry_msgs::Twist::ConstPtr 
     uint8_t pack[PACK_MAX_SIZE];
     ChassisControl chassis_control_data;
 //TODO(Krik): get the effective command from the decision module
-    chassis_control_data.ctrl_mode = AUTO_FOLLOW_GIMBAL;
+    chassis_control_data.ctrl_mode = AUTO_SEPARATE_GIMBAL;    //AUTO_FOLLOW_GIMBAL
+
     chassis_control_data.x_speed = vel->linear.x * 1000.0;
     chassis_control_data.y_speed = vel->linear.y * 1000.0;
     chassis_control_data.w_info.x_offset = 0;
